@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+import os
 import socket
 import threading
 import time
@@ -8,7 +9,6 @@ from random import randint, random
 
 import requests
 import utils
-
 
 target_host = input("Target host (www.google.com): ")
 if not target_host:
@@ -24,7 +24,7 @@ query_ipv6_in = input('Retrive AAAA record (N): ').lower()
 if not query_ipv6_in:
     query_ipv6 = False
 else:
-    query_ipv6 =  query_ipv6_in == 'y' or query_ipv6_in =='true'
+    query_ipv6 = query_ipv6_in == 'y' or query_ipv6_in == 'true'
 
 dns_list = utils.load_addr_list('dns.google.com_fast.txt')
 
@@ -73,7 +73,7 @@ def format_ip(num):
     return "%d.%d.%d.%d" % ((num >> 24) % 256, (num >> 16) % 256, (num >> 8) % 256, num % 256)
 
 
-retrived_ip_list = list()
+retrieved_ip_list = list()
 ip_list_lock = threading.Lock()
 
 THREAD_COUNT = 150
@@ -84,7 +84,9 @@ work_lock = threading.Lock()
 
 work_increnent = int(256 * 256 * 256 * 256 / sampling_conut)
 
-out_file = open('%s_out_%d%s.txt' % (target_host, int(time.time()), '_ipv6' if query_ipv6 else ''), 'w')
+if not os.path.exists('out'):
+    os.mkdir('out')
+out_file = open('out//%s_out_%d%s.txt' % (target_host, int(time.time()), '_ipv6' if query_ipv6 else ''), 'w')
 w_count = 0
 
 
@@ -93,27 +95,33 @@ def append_ip(ip):
     if not ip:
         return
     with ip_list_lock:
-        if ip not in retrived_ip_list:  # TODO: use dict to accelarate finding
-            retrived_ip_list.append(ip)
+        if ip not in retrieved_ip_list:  # TODO: use dict to accelarate finding
+            retrieved_ip_list.append(ip)
             out_file.write(ip + '\n')
             if w_count % 100 == 0:
                 out_file.flush()
             w_count += 1
             print(ip)
 
+
 def append_ip_list(ip_list):
     global w_count
     if not ip_list:
         return
+
+    w = False
     with ip_list_lock:
         for ip in ip_list:
-            if ip not in retrived_ip_list:  # TODO: use dict to accelarate finding
-                retrived_ip_list.append(ip)
-                out_file.write(ip + '\n')
-                if w_count % 100 == 0:
-                    out_file.flush()
+            if ip not in retrieved_ip_list:  # TODO: use dict to accelerate finding
+                retrieved_ip_list.append(ip)
                 w_count += 1
+
                 print(ip)
+                out_file.write(ip + '\n')
+                w = w_count % 100 == 0
+
+    if w:
+        out_file.flush()
 
 
 def take_ip_index():
@@ -124,16 +132,17 @@ def take_ip_index():
         return
 
     with work_lock:
+        count = work_current_count
         res = work_current_pos
 
         work_current_count += 1
         work_current_pos += work_increnent
 
-        if work_current_count % 1000 == 0:
-            print("  Working on %s" % format_ip(res))
-            if work_current_count % 12 == 0:
-                out_file.flush()
-        return res
+    if count % 1000 == 0:
+        print("  Working on %s" % format_ip(res))
+        if count % 12 == 0:
+            out_file.flush()
+    return res
 
 
 def worker_thread(id):
@@ -156,8 +165,8 @@ def worker_thread(id):
 def watcher_thread():
     thread_list = [threading.Thread(target=worker_thread, args=(i,))
                    for i in range(0, THREAD_COUNT)]
-    [thread.start() for thread in thread_list]
-    [thread.join() for thread in thread_list]
+    [th.start() for th in thread_list]
+    [th.join() for th in thread_list]
 
 
 if __name__ == "__main__":

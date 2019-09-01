@@ -24,6 +24,7 @@ RESULT_SUCCEED = 1
 
 def ttl_test(addr, ttl):
     s, sa = utils.create_socket(addr, False)
+    s.settimeout(2)
 
     try:
         s.connect(sa)
@@ -31,7 +32,6 @@ def ttl_test(addr, ttl):
         return RESULT_FAILED
 
     s.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
-    s.settimeout(2)
 
     try:
         s.sendall(bad_payload)
@@ -49,6 +49,7 @@ def ttl_test(addr, ttl):
 
 def test_connection(addr):
     s, sa = utils.create_socket(addr, False)
+    s.settimeout(2)
     try:
         s.connect(sa)
     except:
@@ -64,12 +65,18 @@ def https_reset_test(host):
         print("Cannot connect to %s:%d" % (host, port))
         return
 
+    if ttl_test(addr, 255) != RESULT_RESET:
+        print('No reset packet was received from path to %s' % host)
+        return
+
     lbound = 0
     rbound = 255
 
     while lbound + 1 != rbound:
-        if lbound < 32 and 32 < rbound:
-            mid = 32
+        if lbound < 12 and 12 < rbound:
+            mid = 12
+        elif lbound >= 12:
+            mid = int((lbound * 4 + rbound) / 5)
         else:
             mid = int((lbound + rbound) / 2)
         print("testing with ttl=%d" % mid)
